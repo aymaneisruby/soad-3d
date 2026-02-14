@@ -1,687 +1,934 @@
-import React, { useRef, useState, useEffect } from 'react'
-
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-
-import { Text, Text3D, Center, Image, Environment, Sparkles, Float, useCursor } from '@react-three/drei'
-
-import { EffectComposer, Bloom, Noise, Vignette, ChromaticAberration } from '@react-three/postprocessing'
-
-import * as THREE from 'three'
-
+import { Center, Environment, Float, Image, Sparkles, Text, Text3D, useCursor } from '@react-three/drei'
+import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing'
 import { easing } from 'maath'
+import './App.css'
 
-
-
-// --- DATA ---
-
-// Added "tracks" for the futuristic tracklist feature
-
-const ALBUMS = [
-
-  {
-
-    img: '/albums/soad.jpg',
-
-    name: 'SYSTEM OF A DOWN',
-
-    year: 'Jun 30, 1998',
-
-    tracks: ['Suite-Pee', 'Know', 'Sugar', 'Spiders', 'War?']
-
-  },
-
-  {
-
-    img: '/albums/toxicity.jpg',
-
-    name: 'TOXICITY',
-
-    year: 'Sep 4, 2001',
-
-    tracks: ['Prison Song', 'Needles', 'Deer Dance', 'Chop Suey!', 'Bounce']
-
-  },
-
-  {
-
-    img: '/albums/steal_this_album.jpg',
-
-    name: 'STEAL THIS ALBUM!',
-
-    year: 'Nov 26, 2002',
-
-    tracks: ['Chic \'N\' Stu', 'Innervision', 'Bubbles', 'Boom!', 'I-E-A-I-A-I-O']
-
-  },
-
-  {
-
-    img: '/albums/mezmerize.jpg',
-
-    name: 'MEZMERIZE',
-
-    year: 'May 17, 2005',
-
-    tracks: ['Soldier Side', 'B.Y.O.B.', 'Revenga', 'Cigaro', 'Radio/Video']
-
-  },
-
-  {
-
-    img: '/albums/hypnotize.jpg',
-
-    name: 'HYPNOTIZE',
-
-    year: 'Nov 22, 2005',
-
-    tracks: ['Attack', 'Dreaming', 'Kill Rock \'n Roll', 'Hypnotize', 'Lonely Day']
-
-  },
-
-  {
-
-    img: '/albums/protect_the_land.jpg',
-
-    name: 'Protect The Land / Genocidal Humanoidz',
-
-    year: 'Nov 6, 2020',
-
-    tracks: []
-
-  },
-
+const NAV_ITEMS = [
+  { label: 'Discography', href: '#discography' },
+  { label: 'Members', href: '#members' },
+  { label: 'Tours', href: '#' },
+  { label: 'Store', href: '#' },
 ]
 
+const BAND_MEMBERS = [
+  {
+    name: 'Serj Tankian',
+    role: 'Lead Vocals, Keyboards',
+    signature: 'Operatic range and political lyricism that defines the band identity.',
+    accent: '#ff5d46',
+    image: '/members/01.png',
+  },
+  {
+    name: 'Daron Malakian',
+    role: 'Guitar, Vocals, Songwriting',
+    signature: 'Angular riff architecture and melodic hooks across SOAD classics.',
+    accent: '#ff8a3a',
+    image: '/members/02.png',
+  },
+  {
+    name: 'Shavo Odadjian',
+    role: 'Bass',
+    signature: 'Heavy low-end motion and stage-driven groove foundation.',
+    accent: '#4a7dff',
+    image: '/members/03.png',
+  },
+  {
+    name: 'John Dolmayan',
+    role: 'Drums',
+    signature: 'Precision drumming with explosive dynamic transitions.',
+    accent: '#d94bff',
+    image: '/members/04.png',
+  },
+]
 
-
-// --- COMPONENTS ---
-
-
-
-function Tracklist({ tracks, visible }) {
-
-  // This is the holographic list that appears when you click
-
-  return (
-
-    <group position={[2.5, 0, 0]} visible={visible}>
-
-      {tracks.map((track, i) => (
-
-        <Text
-
-          key={i}
-
-          position={[0, 1.2 - (i * 0.4), 0]} // Stack them vertically
-
-          fontSize={0.2}
-
-          color={visible ? "#fff" : "transparent"} // Fade in logic could go here
-
-          anchorX="left"
-
-          font="https://fonts.gstatic.com/s/roboto/v30/KFOmCnqEu92Fr1Mu4mxM.woff" // Safe standard font
-
-        >
-
-          {i + 1}. {track.toUpperCase()}
-
-        </Text>
-
-      ))}
-
-    </group>
-
-  )
-
+const TRACK_FILES = {
+  soad: [
+    '01-System Of A Down- Suite-Pee.mp3',
+    '02-System Of A Down- Know.mp3',
+    '03-System Of A Down- Sugar.mp3',
+    '04-System Of A Down- Suggestions.mp3',
+    '05-System Of A Down- Spiders.mp3',
+    '06-System Of A Down- Ddevil.mp3',
+    '07-System Of A Down- Soil.mp3',
+    '08-System Of A Down- War？.mp3',
+    '09-System Of A Down- Mind.mp3',
+    '10-System Of A Down- Peephole.mp3',
+    '11-System Of A Down- CUBErt.mp3',
+    '12-System Of A Down- Darts.mp3',
+    '13-System Of A Down- P.L.U.C.K. (Politically Lying, Unholy, Cowardly Killers).mp3',
+    '14-System Of A Down- Marmalade.mp3',
+    '15-System Of A Down- Störagéd.mp3',
+  ],
+  toxicity: [
+    '01-System Of A Down- Prison Song.mp3',
+    '02-System Of A Down- Needles.mp3',
+    '03-System Of A Down- Deer Dance.mp3',
+    '04-System Of A Down- Jet Pilot.mp3',
+    '05-System Of A Down- X.mp3',
+    '06-System Of A Down- Chop Suey!.mp3',
+    '07-System Of A Down- Bounce.mp3',
+    '08-System Of A Down- Forest.mp3',
+    '09-System Of A Down- Atwa.mp3',
+    '10-System Of A Down- Science.mp3',
+    '11-System Of A Down- Shimmy.mp3',
+    '12-System Of A Down- Toxicity.mp3',
+    '13-System Of A Down- Psycho.mp3',
+    '14-System Of A Down- Aerials & Arto.mp3',
+    '15-System Of A Down- Johnny.mp3',
+  ],
+  steal_this_album: [
+    "01-System Of A Down- Chic 'n' Stu.mp3",
+    '02-System Of A Down- Innervision.mp3',
+    '03-System Of A Down- Bubbles.mp3',
+    '04-System Of A Down- Boom!.mp3',
+    '05-System Of A Down- Nüguns.mp3',
+    '06-System Of A Down- A.D.D. (American Dream Denial).mp3',
+    '07-System Of A Down- Mr. Jack.mp3',
+    '08-System Of A Down- I-E-A-I-A-I-O.mp3',
+    '09-System Of A Down- 36.mp3',
+    '10-System Of A Down- Pictures.mp3',
+    '11-System Of A Down- Highway Song.mp3',
+    '12-System Of A Down- Fuck the System.mp3',
+    '13-System Of A Down- Ego Brain.mp3',
+    '14-System Of A Down- Thetawaves.mp3',
+    '15-System Of A Down- Roulette.mp3',
+    '16-System Of A Down- Streamline.mp3',
+  ],
+  mezmerize: [
+    '01-System of a Down- Soldier Side (Intro).mp3',
+    '02-System of a Down- B.Y.O.B..mp3',
+    '03-System of a Down- Revenga.mp3',
+    '04-System of a Down- Cigaro.mp3',
+    '05-System of a Down- Radio⧸Video.mp3',
+    "06-System of a Down- This Cocaine Makes Me Feel Like I'm on This Song.mp3",
+    '07-System of a Down- Violent Pornograhpy.mp3',
+    '08-System of a Down- Question!.mp3',
+    '09-System of a Down- Sad Statue.mp3',
+    '10-System of a Down- Old School Hollywood.mp3',
+    '11-System of a Down- Lost in Hollywood.mp3',
+  ],
+  hypnotize: [
+    '01-System of a Down- Attack.mp3',
+    '02-System of a Down- Dreaming.mp3',
+    "03-System of a Down- Kill Rock 'N Roll.mp3",
+    '04-System of a Down- Hypnotize.mp3',
+    '05-System of a Down- Stealing Society.mp3',
+    '06-System of a Down- Tentative.mp3',
+    '07-System of a Down- U-Fig.mp3',
+    '08-System of a Down- Holy Mountains.mp3',
+    '09-System of a Down- Vicinity of Obscenity.mp3',
+    "10-System of a Down- She's Like Heroin.mp3",
+    '11-System of a Down- Lonely Day.mp3',
+    '12-System of a Down- Soldier Side.mp3',
+  ],
 }
 
+const buildTrack = (dir, file) => {
+  const match = file.match(/^(\d+)-.*?- (.+)\.mp3$/i)
+  const number = match?.[1] ?? ''
+  const title = match?.[2] ?? file.replace(/\.mp3$/i, '')
 
+  return {
+    number,
+    title,
+    src: `/tracks/${dir}/${file}`,
+  }
+}
 
-function RouletteItem({ url, name, year, tracks, position, rotation, index, setFocus, focusIndex }) {
+const ALBUMS = [
+  {
+    key: 'soad',
+    img: '/albums/soad.jpg',
+    cd: '/cds/soad.png',
+    name: 'System Of A Down',
+    releaseDate: 'June 30, 1998',
+    tracks: TRACK_FILES.soad.map((file) => buildTrack('soad', file)),
+  },
+  {
+    key: 'toxicity',
+    img: '/albums/toxicity.jpg',
+    cd: '/cds/toxicity.png',
+    name: 'Toxicity',
+    releaseDate: 'September 4, 2001',
+    tracks: TRACK_FILES.toxicity.map((file) => buildTrack('toxicity', file)),
+  },
+  {
+    key: 'steal_this_album',
+    img: '/albums/steal_this_album.jpg',
+    cd: '/cds/steal_this_album.png',
+    name: 'Steal This Album!',
+    releaseDate: 'November 26, 2002',
+    tracks: TRACK_FILES.steal_this_album.map((file) => buildTrack('steal_this_album', file)),
+  },
+  {
+    key: 'mezmerize',
+    img: '/albums/mezmerize.jpg',
+    cd: '/cds/mezmerize.png',
+    name: 'Mezmerize',
+    releaseDate: 'May 17, 2005',
+    tracks: TRACK_FILES.mezmerize.map((file) => buildTrack('mezmerize', file)),
+  },
+  {
+    key: 'hypnotize',
+    img: '/albums/hypnotize.jpg',
+    cd: '/cds/hypnotize.png',
+    name: 'Hypnotize',
+    releaseDate: 'November 22, 2005',
+    tracks: TRACK_FILES.hypnotize.map((file) => buildTrack('hypnotize', file)),
+  },
+]
 
-  const groupRef = useRef()
-
-  const [hovered, setHover] = useState(false)
-
- 
+function AlbumCard({ album, index, position, rotation, focusIndex, onFocus }) {
+  const groupRef = useRef(null)
+  const [hovered, setHovered] = useState(false)
+  const isFocused = focusIndex === index
 
   useCursor(hovered)
 
- 
-
-  // Is this specific album focused?
-
-  const isFocused = focusIndex === index
-
-
-
   useFrame((state, delta) => {
-
-    // Floating animation (stops when focused so it's easier to read)
+    if (!groupRef.current) return
 
     if (focusIndex === null) {
-
       const t = state.clock.getElapsedTime()
-
-      groupRef.current.position.y = position[1] + Math.sin(t * 2 + position[0]) * 0.1
-
+      groupRef.current.position.y = position[1] + Math.sin(t * 1.6 + position[0]) * 0.12
     }
 
-   
-
-    // Scale Logic:
-
-    // If focused: Grow Big (1.5)
-
-    // If hovered: Grow slightly (1.1)
-
-    // Else: Normal (1)
-
-    const targetScale = isFocused ? 1.5 : (hovered ? 1.1 : 1)
-
-    easing.damp3(groupRef.current.scale, [targetScale, targetScale, targetScale], 0.1, delta)
-
+    const modeScale = focusIndex === null ? 1 : 0.8
+    const targetScale = modeScale * (isFocused ? 1.16 : hovered ? 1.04 : 1)
+    easing.damp3(groupRef.current.scale, [targetScale, targetScale, targetScale], 0.18, delta)
   })
 
-
-
   return (
-
     <group
-
       ref={groupRef}
-
       position={position}
-
       rotation={rotation}
-
-      onClick={(e) => {
-
-        e.stopPropagation()
-
-        setFocus(index)
-
+      onClick={(event) => {
+        event.stopPropagation()
+        if (event.delta > 4) return
+        onFocus(index)
       }}
-
-      onPointerOver={() => setHover(true)}
-
-      onPointerOut={() => setHover(false)}
-
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}
     >
-
-      {/* FRAME */}
-
-      <mesh>
-
-        <boxGeometry args={[3.2, 3.2, 0.1]} />
-
-        <meshStandardMaterial color="#222" roughness={0.4} metalness={0.6} />
-
+      <mesh position={[0, 0, -0.01]}>
+        <boxGeometry args={[2.86, 2.86, 0.12]} />
+        <meshStandardMaterial color="#101010" roughness={0.42} metalness={0.86} />
       </mesh>
 
+      <mesh position={[0, 0, 0.07]}>
+        <planeGeometry args={[2.62, 2.62]} />
+        <meshStandardMaterial color={isFocused ? '#3d1515' : '#1a1a1a'} emissive="#100505" metalness={0.1} />
+      </mesh>
 
+      <Image url={album.img} position={[0, 0, 0.08]} scale={[2.56, 2.56]} toneMapped={false} />
+      <Image
+        url="/albums/soad_logo.jpg"
+        position={[0, 0, -0.08]}
+        rotation={[0, Math.PI, 0]}
+        scale={[2.56, 2.56]}
+        toneMapped={false}
+      />
 
-      {/* FRONT IMAGE */}
-
-      <Image url={url} position={[0, 0, 0.06]} scale={[3, 3]} toneMapped={false} />
-
-
-
-      {/* BACK LOGO */}
-
-      <Image url="/albums/soad_logo.jpg" position={[0, 0, -0.06]} rotation={[0, Math.PI, 0]} scale={[3, 3]} toneMapped={false} />
-
-
-
-      {/* METADATA LABELS (Name & Year) */}
-
-      {/* We hide these when the album is focused to make room for the tracklist */}
-
-      <group position={[0, -2, 0]} visible={!isFocused}>
-
-        <Text
-
-          fontSize={0.25}
-
-          color="white"
-
-          anchorY="top"
-
-          anchorX="center"
-
-          position={[0, 0, 0]}
-
-        >
-
-          {name}
-
+      <group position={[0, -1.78, 0]}>
+        <Text fontSize={0.2} color={isFocused ? '#ffe2dd' : '#f4f2ef'} anchorX="center" anchorY="top">
+          {album.name.toUpperCase()}
         </Text>
-
         <Text
-
-          fontSize={0.15}
-
-          color="#ff0000"
-
-          anchorY="top"
-
+          fontSize={0.12}
+          color={isFocused ? '#ff8a74' : '#ff6c57'}
+          position={[0, -0.26, 0]}
           anchorX="center"
-
-          position={[0, -0.3, 0]}
-
+          anchorY="top"
         >
-
-          {year}
-
+          {album.releaseDate}
         </Text>
-
       </group>
-
-
-
-      {/* THE FUTURISTIC TRACKLIST */}
-
-      {/* Only visible when focused */}
-
-      <Tracklist tracks={tracks} visible={isFocused} />
-
-
-
     </group>
-
   )
-
 }
 
-
-
-function Carousel({ setFocus, focusIndex }) {
-
-  const groupRef = useRef()
-
+function AlbumCarousel({ focusIndex, onFocus, onDraggingChange }) {
+  const groupRef = useRef(null)
   const rotationRef = useRef(0)
-
   const velocityRef = useRef(0)
-
-  const isDragging = useRef(false)
-
-  const prevPointerX = useRef(0)
-
-
-
-  const radius = 7
+  const isDraggingRef = useRef(false)
+  const prevPointerXRef = useRef(0)
+  const snapTargetRef = useRef(null)
+  const { camera, viewport, gl } = useThree()
 
   const count = ALBUMS.length
-
-  const { camera, viewport } = useThree()
-
- 
-
   const isMobile = viewport.width < 8
+  const defaultZ = isMobile ? 17.6 : 14.4
+  const baseRadius = isMobile ? 5.1 : Math.min(6.2, Math.max(5.6, viewport.width * 0.42))
+  const activeRadius = focusIndex === null ? baseRadius : baseRadius - 0.35
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
-  const defaultZ = isMobile ? 22 : 14
-
-
+  const shortestAngle = (from, to) => {
+    const twoPi = Math.PI * 2
+    return ((((to - from) % twoPi) + Math.PI * 3) % twoPi) - Math.PI
+  }
 
   useEffect(() => {
+    if (focusIndex === null) {
+      snapTargetRef.current = null
+      return
+    }
+    const target = -(focusIndex / count) * Math.PI * 2
+    snapTargetRef.current = target
+    velocityRef.current *= 0.35
+  }, [focusIndex, count])
 
-    const handleWheel = (e) => {
+  useEffect(() => {
+    const domElement = gl.domElement
 
-      if (focusIndex !== null) {
-
-        setFocus(null)
-
-        return
-
-      }
-
-      velocityRef.current += e.deltaY * 0.0005
-
+    const handleWheel = (event) => {
+      event.preventDefault()
+      velocityRef.current = clamp(velocityRef.current + event.deltaY * -0.00024, -0.08, 0.08)
     }
 
-
-
-    const handlePointerDown = (e) => {
-
-      if (focusIndex !== null) return
-
-      isDragging.current = true
-
-      prevPointerX.current = e.clientX
-
+    const handlePointerDown = (event) => {
+      isDraggingRef.current = true
+      prevPointerXRef.current = event.clientX
+      onDraggingChange(true)
     }
-
-
 
     const handlePointerUp = () => {
-
-      isDragging.current = false
-
+      isDraggingRef.current = false
+      onDraggingChange(false)
     }
 
-
-
-    const handlePointerMove = (e) => {
-
-      if (!isDragging.current || focusIndex !== null) return
-
-      const deltaX = e.clientX - prevPointerX.current
-
-      velocityRef.current += deltaX * 0.002
-
-      prevPointerX.current = e.clientX
-
+    const handlePointerMove = (event) => {
+      if (!isDraggingRef.current) return
+      const deltaX = event.clientX - prevPointerXRef.current
+      velocityRef.current = clamp(velocityRef.current + deltaX * -0.00092, -0.08, 0.08)
+      prevPointerXRef.current = event.clientX
     }
 
-
-
-    window.addEventListener('wheel', handleWheel)
-
-    window.addEventListener('pointerdown', handlePointerDown)
-
+    domElement.addEventListener('wheel', handleWheel, { passive: false })
+    domElement.addEventListener('pointerdown', handlePointerDown)
     window.addEventListener('pointerup', handlePointerUp)
-
     window.addEventListener('pointermove', handlePointerMove)
 
-
-
     return () => {
-
-      window.removeEventListener('wheel', handleWheel)
-
-      window.removeEventListener('pointerdown', handlePointerDown)
-
+      domElement.removeEventListener('wheel', handleWheel)
+      domElement.removeEventListener('pointerdown', handlePointerDown)
       window.removeEventListener('pointerup', handlePointerUp)
-
       window.removeEventListener('pointermove', handlePointerMove)
-
     }
+  }, [focusIndex, gl.domElement, onDraggingChange, onFocus])
 
-  }, [focusIndex])
-
-
-
-
-
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
+    if (!groupRef.current) return
 
     rotationRef.current += velocityRef.current
+    velocityRef.current *= 0.955
 
-    velocityRef.current *= 0.95
-
-
-
-    if (focusIndex === null) {
-
-        groupRef.current.rotation.y = rotationRef.current
-
-        easing.damp3(camera.position, [0, 0, defaultZ], 0.5, delta)
-
-        easing.dampE(camera.rotation, [0, 0, 0], 0.5, delta)
-
-    } else {
-
-        const targetRotation = -(focusIndex / count) * Math.PI * 2
-
-        easing.damp(groupRef.current.rotation, 'y', targetRotation, 0.5, delta)
-
-        // Move closer for the "Deconstruction" view
-
-        // Shift camera slightly to the left (-2) so the album is on the left
-
-        // and tracklist is on the right
-
-        const closeUpZ = radius + 6
-
-        easing.damp3(camera.position, [-2, 0, closeUpZ], 0.5, delta)
-
+    if (focusIndex !== null && !isDraggingRef.current && snapTargetRef.current !== null) {
+      const diff = shortestAngle(rotationRef.current, snapTargetRef.current)
+      rotationRef.current += diff * Math.min(1, delta * 5.8)
+      if (Math.abs(diff) < 0.002) snapTargetRef.current = null
     }
 
+    groupRef.current.rotation.y = rotationRef.current
+
+    if (focusIndex === null) {
+      easing.damp3(groupRef.current.position, [0, 0, 0], 0.5, delta)
+      easing.damp3(camera.position, [0, 0, defaultZ], 0.5, delta)
+      easing.dampE(camera.rotation, [0, 0, 0], 0.5, delta)
+      return
+    }
+
+    const focusedX = isMobile ? -2.3 : -2.75
+    const focusedY = 0
+    easing.damp3(groupRef.current.position, [focusedX, focusedY, 0], 0.52, delta)
+    easing.damp3(camera.position, [0, 0, defaultZ], 0.5, delta)
+    easing.dampE(camera.rotation, [0, 0, 0], 0.5, delta)
   })
 
-
-
   return (
-
     <group ref={groupRef}>
-
       {ALBUMS.map((album, index) => {
-
         const angle = (index / count) * Math.PI * 2
-
-        const x = Math.sin(angle) * radius
-
-        const z = Math.cos(angle) * radius
-
-       
+        const x = Math.sin(angle) * activeRadius
+        const z = Math.cos(angle) * activeRadius
 
         return (
-
-          <RouletteItem
-
-            key={index}
-
+          <AlbumCard
+            key={album.key}
+            album={album}
             index={index}
-
-            url={album.img}
-
-            name={album.name}
-
-            year={album.year}
-
-            tracks={album.tracks}
-
             position={[x, 0, z]}
-
             rotation={[0, angle, 0]}
-
-            setFocus={setFocus}
-
             focusIndex={focusIndex}
-
+            onFocus={onFocus}
           />
-
         )
-
       })}
-
     </group>
-
   )
-
 }
 
-
-
-function MainTitle({ visible }) {
-
+function MainTitle() {
   const { viewport } = useThree()
-
-  const scale = viewport.width < 8 ? 0.45 : 0.9
-
-
+  const scale = viewport.width < 8 ? 0.42 : 0.84
 
   return (
-
-    <Center position={[0, 0, 0]} visible={visible}>
-
-      <Float speed={2} rotationIntensity={0.1} floatIntensity={0.2}>
-
+    <Center>
+      <Float speed={1.35} floatIntensity={0.17} rotationIntensity={0.06}>
         <group scale={scale}>
-
           <Text3D
-
             font="https://threejs.org/examples/fonts/helvetiker_bold.typeface.json"
-
-            size={1} height={0.1} letterSpacing={0.1}
-
-            bevelEnabled bevelThickness={0.02} bevelSize={0.02} bevelSegments={3}
-
+            size={1}
+            height={0.18}
+            letterSpacing={0.04}
+            bevelEnabled
+            bevelThickness={0.03}
+            bevelSize={0.03}
+            bevelSegments={5}
+            position={[0, -0.01, -0.04]}
           >
-
             SYSTEM OF A DOWN
-
-            <meshStandardMaterial color="#444" roughness={0.8} metalness={0.7} />
-
+            <meshStandardMaterial color="#2a0907" roughness={0.78} metalness={0.45} />
           </Text3D>
-
+          <Text3D
+            font="https://threejs.org/examples/fonts/helvetiker_bold.typeface.json"
+            size={1}
+            height={0.13}
+            letterSpacing={0.04}
+            bevelEnabled
+            bevelThickness={0.024}
+            bevelSize={0.022}
+            bevelSegments={5}
+            position={[0, 0, 0.03]}
+          >
+            SYSTEM OF A DOWN
+            <meshStandardMaterial color="#d63f2d" emissive="#3a0906" emissiveIntensity={0.55} roughness={0.44} metalness={0.72} />
+          </Text3D>
         </group>
-
       </Float>
-
     </Center>
-
   )
-
 }
 
-
-
-function DynamicEffects() {
-
-    return (
-
-        <EffectComposer disableNormalPass>
-
-            <Bloom luminanceThreshold={0.2} intensity={0.8} radius={0.5} mipmapBlur />
-
-            <Noise opacity={0.05} />
-
-            <Vignette eskil={false} offset={0.1} darkness={1.0} />
-
-            <ChromaticAberration offset={[0.001, 0.001]} />
-
-        </EffectComposer>
-
-    )
-
+function SceneEffects() {
+  return (
+    <EffectComposer disableNormalPass>
+      <Bloom intensity={0.66} luminanceThreshold={0.24} radius={0.58} mipmapBlur />
+      <Noise opacity={0.018} />
+      <Vignette eskil={false} offset={0.16} darkness={0.96} />
+      <ChromaticAberration offset={[0.0002, 0.0002]} />
+    </EffectComposer>
+  )
 }
 
+function TopNav() {
+  return (
+    <header className="app-nav">
+      <div className="brand-lockup">
+        <img src="/logo.png" alt="System Of A Down" className="app-logo" />
+        <p className="brand-meta">3D Listening Vault</p>
+      </div>
+      <nav className="app-nav-links">
+        {NAV_ITEMS.map((item) => (
+          <a key={item.label} href={item.href} className="app-nav-link">
+            {item.label}
+          </a>
+        ))}
+      </nav>
+    </header>
+  )
+}
 
+function HeroCopy({ focused, pinned, onToggle }) {
+  return (
+    <section className={`hero-copy ${pinned ? 'is-open' : 'is-collapsed'} ${focused ? 'is-focused' : ''}`}>
+      <button type="button" className="hero-toggle" onClick={onToggle}>
+        {pinned ? 'Hide Brief' : 'Show Brief'}
+      </button>
+      <div className="hero-body">
+        <p className="hero-kicker">Immersive Catalog Experience</p>
+        <h1 className="hero-title">Explore SOAD albums in a kinetic 3D gallery.</h1>
+        <p className="hero-subtitle">Drag to spin the ring, click a cover to lock focus, then play tracks instantly.</p>
+        <a href="#members" className="hero-cta">
+          Meet The Band
+        </a>
+      </div>
+    </section>
+  )
+}
 
-export default function App() {
+function MembersScene({ members, selected, onSelect }) {
+  const cardsRef = useRef([])
+  const dragRef = useRef({ down: false, startX: 0, moved: 0 })
+  const { camera, gl } = useThree()
+  const count = members.length
 
-  const [focusIndex, setFocus] = useState(null)
+  const getRelativeIndex = (idx) => {
+    const raw = idx - selected
+    const half = Math.floor(count / 2)
+    if (raw > half) return raw - count
+    if (raw < -half) return raw + count
+    return raw
+  }
 
+  useEffect(() => {
+    const domElement = gl.domElement
 
+    const onDown = (event) => {
+      dragRef.current = { down: true, startX: event.clientX, moved: 0 }
+    }
+    const onMove = (event) => {
+      if (!dragRef.current.down) return
+      dragRef.current.moved = event.clientX - dragRef.current.startX
+    }
+    const onUp = () => {
+      if (!dragRef.current.down) return
+      const delta = dragRef.current.moved
+      if (delta > 48) onSelect((selected - 1 + count) % count)
+      if (delta < -48) onSelect((selected + 1) % count)
+      dragRef.current = { down: false, startX: 0, moved: 0 }
+    }
+    const onWheel = (event) => {
+      if (Math.abs(event.deltaY) < 12) return
+      if (event.deltaY > 0) onSelect((selected + 1) % count)
+      else onSelect((selected - 1 + count) % count)
+    }
+    const onKey = (event) => {
+      if (event.key === 'ArrowLeft') onSelect((selected - 1 + count) % count)
+      if (event.key === 'ArrowRight') onSelect((selected + 1) % count)
+    }
+
+    domElement.addEventListener('pointerdown', onDown)
+    domElement.addEventListener('wheel', onWheel, { passive: true })
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('keydown', onKey)
+
+    return () => {
+      domElement.removeEventListener('pointerdown', onDown)
+      domElement.removeEventListener('wheel', onWheel)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [count, gl.domElement, onSelect, selected])
+
+  useFrame((_, delta) => {
+    cardsRef.current.forEach((card, idx) => {
+      if (!card) return
+      const rel = getRelativeIndex(idx)
+      const absRel = Math.abs(rel)
+
+      const targetX = rel * 2.55
+      const targetY = absRel === 0 ? Math.sin(performance.now() * 0.0018) * 0.06 : -0.08 * absRel
+      const targetZ = -absRel * 2.35
+      const targetRotY = rel * -0.36
+      const targetScale = absRel === 0 ? 1.06 : absRel === 1 ? 0.86 : 0.7
+
+      easing.damp3(card.position, [targetX, targetY, targetZ], 0.19, delta)
+      easing.dampE(card.rotation, [0, targetRotY, 0], 0.19, delta)
+      easing.damp3(card.scale, [targetScale, targetScale, targetScale], 0.19, delta)
+      card.visible = absRel <= 2
+    })
+
+    easing.damp3(camera.position, [0, 0, 11.8], 0.4, delta)
+    easing.dampE(camera.rotation, [0, 0, 0], 0.4, delta)
+  })
 
   return (
-
-    <div style={{ width: '100vw', height: '100vh', background: '#000', cursor: focusIndex === null ? 'grab' : 'auto' }}>
-
-     
-
-      {/* NAVBAR */}
-
-      <nav style={{
-
-        position: 'absolute', top: 0, left: 0, width: '100%',
-
-        padding: '20px 40px', boxSizing: 'border-box',
-
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-
-        zIndex: 100, pointerEvents: 'none'
-
-      }}>
-
-        <div style={{ color: 'white', fontFamily: 'sans-serif', fontWeight: 'bold', letterSpacing: '2px', pointerEvents: 'auto', cursor: 'pointer' }}>
-
-          <img src='/logo.png'  style={{ width:'150px', height:'40px'}}/>
-
-        </div>
-
-        <div style={{ display: 'flex', gap: '30px', pointerEvents: 'auto' }}>
-
-          {['HOME', 'TOURS', 'MUSIC', 'STORE'].map((item) => (
-
-            <a key={item} href="#" style={{
-
-              color: 'white', textDecoration: 'none', fontFamily: 'sans-serif',
-
-              fontSize: '14px', letterSpacing: '1px', opacity: 0.8, transition: 'opacity 0.2s'
-
+    <>
+      <color attach="background" args={['#040404']} />
+      <fog attach="fog" args={['#040404', 8, 30]} />
+      <ambientLight intensity={0.34} color="#f5f5f5" />
+      <hemisphereLight intensity={0.42} color="#ffffff" groundColor="#1a1a1a" />
+      <pointLight position={[0, 4.8, 8]} intensity={60} color="#ffffff" />
+      <spotLight position={[10, 10, 9]} angle={0.44} intensity={420} color="#ff785f" penumbra={0.6} />
+      <spotLight position={[-10, -1, 10]} angle={0.42} intensity={260} color="#4d84ff" penumbra={0.5} />
+      <Environment preset="city" blur={0.9} />
+      <group>
+        {members.map((member, idx) => (
+          <group
+            key={member.name}
+            ref={(el) => {
+              cardsRef.current[idx] = el
             }}
+            onClick={(event) => {
+              event.stopPropagation()
+              onSelect(idx)
+            }}
+          >
+            <mesh position={[0, 0, -0.03]}>
+              <boxGeometry args={[2.45, 3.22, 0.16]} />
+              <meshStandardMaterial color="#0e0e0e" roughness={0.36} metalness={0.88} />
+            </mesh>
+            <mesh position={[0, 0, 0.05]}>
+              <planeGeometry args={[2.28, 3.02]} />
+              <meshStandardMaterial color="#171717" emissive="#100808" emissiveIntensity={0.25} />
+            </mesh>
+            <Image url={member.image} position={[0, 0, 0.08]} scale={[2.2, 2.94]} toneMapped={false} />
+            <Text position={[0, -1.92, 0.08]} fontSize={0.14} color="#f7f2ea" anchorX="center">
+              {member.name.toUpperCase()}
+            </Text>
+          </group>
+        ))}
+      </group>
+      <Sparkles count={160} scale={18} size={2.2} speed={0.22} opacity={0.28} color="#ff5b3a" />
+      <SceneEffects />
+    </>
+  )
+}
 
-            onMouseOver={(e) => e.target.style.opacity = 1}
+function BandMembersSection({ members, index, onPrev, onNext, onSelect }) {
+  const member = members[index]
 
-            onMouseOut={(e) => e.target.style.opacity = 0.8}
-
-            >
-
-              {item}
-
-            </a>
-
-          ))}
-
-        </div>
-
-      </nav>
-
-
-
-      {/* CANVAS */}
-
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 1 }}
-
-           onClick={() => setFocus(null)}>
-
-        <Canvas camera={{ position: [0, 0, 14], fov: 45 }} dpr={[1, 2]}>
-
-          <color attach="background" args={['#050505']} />
-
-          <fog attach="fog" args={['#050505', 10, 30]} />
-
-          <pointLight position={[0, 5, 10]} intensity={100} color="white" />
-
-          <spotLight position={[10, 10, 10]} angle={0.5} intensity={500} color="#ff0000" />
-
-          <spotLight position={[-10, 0, 10]} angle={0.5} intensity={500} color="#6a00ff" />
-
-          <ambientLight intensity={0.5} color="white" />
-
-          <Environment preset="studio" blur={1} />
-
-
-
-          <Carousel setFocus={setFocus} focusIndex={focusIndex} />
-
-          {focusIndex === null && <MainTitle visible={true} />}
-
-         
-
-          <Sparkles count={300} scale={20} size={3} speed={0.4} opacity={0.4} color="#ff3300" />
-
-          <DynamicEffects />
-
+  return (
+    <section id="members" className="members-shell">
+      <div className="members-canvas-wrap">
+        <Canvas camera={{ position: [0, 0, 12], fov: 42 }} dpr={[1.5, 3]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+          <MembersScene members={members} selected={index} onSelect={onSelect} />
         </Canvas>
-
       </div>
 
-     
-
-      {/* FOOTER */}
-
-      {/*<div style={{
-
-          position: 'absolute', bottom: '30px', width: '100%', textAlign: 'center',
-
-          color: '#555', fontFamily: 'sans-serif', fontSize: '12px', pointerEvents: 'none',
-
-          opacity: 0.7, zIndex: 10
-
-      }}>
-
-          DRAG TO SPIN • CLICK ALBUM TO ENTER
-
-      </div>*/}
-
-
-
-    </div>
-
+      <aside className="members-overlay" style={{ '--member-accent': member.accent }}>
+        <p className="members-kicker">System Of A Down</p>
+        <h2 className="members-title">Band Members</h2>
+        <p className="members-copy">Fast spotlight navigation for each artist profile in an immersive 3D stage.</p>
+        <div className="member-controls">
+          <button type="button" className="panel-btn panel-btn-ghost" onClick={onPrev}>
+            Previous
+          </button>
+          <span className="member-counter">
+            {String(index + 1).padStart(2, '0')} / {String(members.length).padStart(2, '0')}
+          </span>
+          <button type="button" className="panel-btn" onClick={onNext}>
+            Next
+          </button>
+        </div>
+        <div className="member-list">
+          {members.map((item, memberIdx) => (
+            <button
+              key={item.name}
+              type="button"
+              className={`member-list-item ${memberIdx === index ? 'is-active' : ''}`}
+              onClick={() => onSelect(memberIdx)}
+            >
+              <img src={item.image} alt={item.name} className="member-thumb" loading="lazy" />
+              <span className="member-list-text">
+                <span className="member-list-name">{item.name}</span>
+                <span className="member-list-role">{item.role}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <article className="member-card">
+          <p className="member-kicker">Band Spotlight</p>
+          <h3 className="member-name">{member.name}</h3>
+          <p className="member-role">{member.role}</p>
+          <p className="member-signature">{member.signature}</p>
+        </article>
+      </aside>
+    </section>
   )
-
 }
+
+function AlbumDetails({ album, nowPlaying, isPlaying, onTrackSelect, onClose }) {
+  if (!album) return null
+
+  const hasCurrentAlbumTrack = album.tracks.some((track) => track.src === nowPlaying?.src)
+
+  return (
+    <aside className="album-panel" aria-live="polite">
+      <div className={`cd-visual ${isPlaying && hasCurrentAlbumTrack ? 'is-spinning' : ''}`}>
+        <div className="cd-rotor">
+          <img src={album.cd} alt={`${album.name} disc`} />
+        </div>
+      </div>
+
+      <p className="album-panel-label">Selected Release</p>
+      <h2 className="album-panel-title">{album.name}</h2>
+      <p className="album-panel-date">{album.releaseDate}</p>
+
+      <div className="panel-controls">
+        <button type="button" className="panel-btn panel-btn-ghost" onClick={onClose}>
+          Back
+        </button>
+      </div>
+
+      <p className="album-panel-section">Tracks</p>
+      <ol className="album-panel-list">
+        {album.tracks.map((track, index) => {
+          const active = nowPlaying?.src === track.src
+          return (
+            <li key={track.src}>
+              <button
+                type="button"
+                className={`track-btn ${active ? 'is-active' : ''}`}
+                onClick={() => onTrackSelect(index)}
+              >
+                <span className="track-main">
+                  <span className="track-index">{track.number}</span>
+                  <span className="track-title">{track.title}</span>
+                </span>
+                {active && <span className="track-status">{isPlaying ? 'Playing' : 'Paused'}</span>}
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </aside>
+  )
+}
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) return '0:00'
+  const safe = Math.max(0, Math.floor(seconds))
+  const mins = Math.floor(safe / 60)
+  const secs = safe % 60
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+function GlobalPlayer({ nowPlaying, isPlaying, onPauseResume, onOpenAlbum, onPrev, onNext, currentTime, duration, onSeek }) {
+  if (!nowPlaying) return null
+
+  return (
+    <section className="global-player" aria-live="polite">
+      <div className={`global-disc ${isPlaying ? 'is-spinning' : ''}`}>
+        <img src={nowPlaying.albumCd} alt={`${nowPlaying.albumName} disc`} />
+      </div>
+      <div className="global-meta">
+        <p className="global-kicker">Now Playing</p>
+        <p className="global-title">{nowPlaying.title}</p>
+        <p className="global-subtitle">
+          {nowPlaying.albumName} · {nowPlaying.number}
+        </p>
+      </div>
+      <div className="global-actions">
+        <button type="button" className="panel-btn panel-btn-ghost" onClick={onPrev}>
+          Prev
+        </button>
+        <button type="button" className="panel-btn" onClick={onPauseResume}>
+          {isPlaying ? 'Pause' : 'Play'}
+        </button>
+        <button type="button" className="panel-btn panel-btn-ghost" onClick={onNext}>
+          Next
+        </button>
+        <button type="button" className="panel-btn panel-btn-ghost" onClick={onOpenAlbum}>
+          Open Album
+        </button>
+      </div>
+      <div className="global-progress">
+        <span>{formatTime(currentTime)}</span>
+        <input
+          type="range"
+          min={0}
+          max={Math.max(duration, 1)}
+          value={Math.min(currentTime, duration || 0)}
+          onInput={onSeek}
+          onChange={onSeek}
+        />
+        <span>{formatTime(duration)}</span>
+      </div>
+    </section>
+  )
+}
+
+export default function App() {
+  const [focusIndex, setFocusIndex] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const [nowPlaying, setNowPlaying] = useState(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [infoPinned, setInfoPinned] = useState(false)
+  const [memberIndex, setMemberIndex] = useState(0)
+  const audioRef = useRef(null)
+  const skipAutoStartRef = useRef(false)
+  const activeMember = BAND_MEMBERS[memberIndex]
+
+  const focusedAlbum = useMemo(() => (focusIndex === null ? null : ALBUMS[focusIndex]), [focusIndex])
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') setFocusIndex(null)
+    }
+
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !nowPlaying) return
+
+    setCurrentTime(0)
+    setDuration(0)
+    audio.src = nowPlaying.src
+    audio
+      .play()
+      .then(() => setIsPlaying(true))
+      .catch(() => setIsPlaying(false))
+  }, [nowPlaying])
+
+  const startTrack = useCallback((albumKey, trackIndex) => {
+    const album = ALBUMS.find((item) => item.key === albumKey)
+    if (!album) return
+    const track = album.tracks[trackIndex]
+    if (!track) return
+    setNowPlaying({
+      ...track,
+      albumKey: album.key,
+      albumName: album.name,
+      albumCd: album.cd,
+      albumTrackIndex: trackIndex,
+    })
+  }, [])
+
+  useEffect(() => {
+    if (focusIndex === null) return
+    if (skipAutoStartRef.current) {
+      skipAutoStartRef.current = false
+      return
+    }
+    const album = ALBUMS[focusIndex]
+    if (!album || album.tracks.length === 0) return
+    startTrack(album.key, 0)
+  }, [focusIndex, startTrack])
+
+  const handleTrackSelect = (trackIndex) => {
+    if (focusIndex === null) return
+    const album = ALBUMS[focusIndex]
+    const track = album.tracks[trackIndex]
+    if (!track) return
+
+    if (nowPlaying?.src === track.src && audioRef.current) {
+      if (audioRef.current.paused) {
+        audioRef.current.play().catch(() => setIsPlaying(false))
+      } else {
+        audioRef.current.pause()
+      }
+      return
+    }
+
+    startTrack(album.key, trackIndex)
+  }
+
+  const handlePauseResume = () => {
+    const audio = audioRef.current
+    if (!audio || !nowPlaying) return
+    if (audio.paused) audio.play().catch(() => setIsPlaying(false))
+    else audio.pause()
+  }
+
+  const handlePrev = () => {
+    if (!nowPlaying) return
+    const prevIndex = nowPlaying.albumTrackIndex - 1
+    if (prevIndex >= 0) startTrack(nowPlaying.albumKey, prevIndex)
+  }
+
+  const handleNext = () => {
+    if (!nowPlaying) return
+    const album = ALBUMS.find((item) => item.key === nowPlaying.albumKey)
+    if (!album) return
+    const nextIndex = nowPlaying.albumTrackIndex + 1
+    if (nextIndex < album.tracks.length) startTrack(nowPlaying.albumKey, nextIndex)
+  }
+
+  const handleSeek = (event) => {
+    const audio = audioRef.current
+    if (!audio) return
+    const time = Number(event.target.value)
+    audio.currentTime = time
+    setCurrentTime(time)
+  }
+
+  const handlePrevMember = () => {
+    setMemberIndex((prev) => (prev - 1 + BAND_MEMBERS.length) % BAND_MEMBERS.length)
+  }
+
+  const handleNextMember = () => {
+    setMemberIndex((prev) => (prev + 1) % BAND_MEMBERS.length)
+  }
+
+  const cursorClass = focusIndex !== null ? 'cursor-default' : isDragging ? 'cursor-grabbing' : 'cursor-grab'
+
+  return (
+    <>
+      <main id="discography" className={`app-shell ${cursorClass}`}>
+        <TopNav />
+        <HeroCopy focused={focusIndex !== null} pinned={infoPinned} onToggle={() => setInfoPinned((prev) => !prev)} />
+
+        <AlbumDetails
+          album={focusedAlbum}
+          nowPlaying={nowPlaying}
+          isPlaying={isPlaying}
+          onTrackSelect={handleTrackSelect}
+          onClose={() => setFocusIndex(null)}
+        />
+        <GlobalPlayer
+          nowPlaying={nowPlaying}
+          isPlaying={isPlaying}
+          onPauseResume={handlePauseResume}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={handleSeek}
+          onOpenAlbum={() => {
+            if (!nowPlaying) return
+            skipAutoStartRef.current = true
+            const targetIndex = ALBUMS.findIndex((album) => album.key === nowPlaying.albumKey)
+            if (targetIndex >= 0) setFocusIndex(targetIndex)
+          }}
+        />
+
+        <div className="canvas-wrap">
+          <Canvas
+            camera={{ position: [0, 0, 14], fov: 42 }}
+            dpr={[1.5, 3]}
+            gl={{ antialias: true, powerPreference: 'high-performance' }}
+            onPointerMissed={() => setFocusIndex(null)}
+          >
+            <color attach="background" args={['#040404']} />
+            <fog attach="fog" args={['#040404', 9, 31]} />
+
+            <ambientLight intensity={0.34} color="#f5f5f5" />
+            <hemisphereLight intensity={0.42} color="#ffffff" groundColor="#1a1a1a" />
+            <pointLight position={[0, 5.2, 8]} intensity={64} color="#ffffff" />
+            <spotLight position={[10, 10, 9]} angle={0.44} intensity={420} color="#ff785f" penumbra={0.6} />
+            <spotLight position={[-10, -1, 10]} angle={0.42} intensity={260} color="#4d84ff" penumbra={0.5} />
+
+            <Environment preset="city" blur={0.9} />
+            <AlbumCarousel focusIndex={focusIndex} onFocus={setFocusIndex} onDraggingChange={setIsDragging} />
+            {focusIndex === null && <MainTitle />}
+            <Sparkles count={200} scale={20} size={2.5} speed={0.24} opacity={0.32} color="#ff5b3a" />
+            <SceneEffects />
+          </Canvas>
+        </div>
+
+        <audio
+          ref={audioRef}
+          preload="none"
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+          onLoadedMetadata={() => setDuration(audioRef.current?.duration ?? 0)}
+          onEnded={handleNext}
+        />
+      </main>
+
+      <BandMembersSection
+        members={BAND_MEMBERS}
+        index={memberIndex}
+        onPrev={handlePrevMember}
+        onNext={handleNextMember}
+        onSelect={setMemberIndex}
+      />
+    </>
+  )
+}
+
+
+
