@@ -14,3 +14,17 @@ The React Compiler is not enabled on this template because of its impact on dev 
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+
+## GitHub Pages Deployment
+
+This project is configured for GitHub Pages project-site deployment at:
+`https://aymaneisruby.github.io/soad-3d/`
+
+1. Push this repo to the `main` branch on GitHub.
+2. In GitHub: `Settings` -> `Pages`.
+3. Under `Build and deployment`, set `Source` to `GitHub Actions`.
+4. The workflow in `.github/workflows/deploy-pages.yml` will build and deploy automatically on push to `main`.
+
+Notes:
+- `vite.config.js` uses `base: '/soad-3d/'`.
+- Asset URLs in `src/App.jsx` are base-aware, so images/audio load correctly on Pages.

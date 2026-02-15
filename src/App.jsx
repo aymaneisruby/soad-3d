@@ -5,6 +5,8 @@ import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@re
 import { easing } from 'maath'
 import './App.css'
 
+const assetUrl = (path) => `${import.meta.env.BASE_URL}${String(path).replace(/^\/+/, '')}`
+
 const NAV_ITEMS = [
   { label: 'Discography', href: '#discography' },
   { label: 'Members', href: '#members' },
@@ -21,28 +23,28 @@ const BAND_MEMBERS = [
     role: 'Lead Vocals, Keyboards',
     signature: 'Operatic range and political lyricism that defines the band identity.',
     accent: '#ff5d46',
-    image: '/members/01.png',
+    image: assetUrl('/members/01.png'),
   },
   {
     name: 'Daron Malakian',
     role: 'Guitar, Vocals, Songwriting',
     signature: 'Angular riff architecture and melodic hooks across SOAD classics.',
     accent: '#ff8a3a',
-    image: '/members/02.png',
+    image: assetUrl('/members/02.png'),
   },
   {
     name: 'Shavo Odadjian',
     role: 'Bass',
     signature: 'Heavy low-end motion and stage-driven groove foundation.',
     accent: '#4a7dff',
-    image: '/members/03.png',
+    image: assetUrl('/members/03.png'),
   },
   {
     name: 'John Dolmayan',
     role: 'Drums',
     signature: 'Precision drumming with explosive dynamic transitions.',
     accent: '#d94bff',
-    image: '/members/04.png',
+    image: assetUrl('/members/04.png'),
   },
 ]
 
@@ -136,47 +138,47 @@ const buildTrack = (dir, file) => {
   return {
     number,
     title,
-    src: `/tracks/${dir}/${file}`,
+    src: assetUrl(`/tracks/${dir}/${file}`),
   }
 }
 
 const ALBUMS = [
   {
     key: 'soad',
-    img: '/albums/soad.jpg',
-    cd: '/cds/soad.png',
+    img: assetUrl('/albums/soad.jpg'),
+    cd: assetUrl('/cds/soad.png'),
     name: 'System Of A Down',
     releaseDate: 'June 30, 1998',
     tracks: TRACK_FILES.soad.map((file) => buildTrack('soad', file)),
   },
   {
     key: 'toxicity',
-    img: '/albums/toxicity.jpg',
-    cd: '/cds/toxicity.png',
+    img: assetUrl('/albums/toxicity.jpg'),
+    cd: assetUrl('/cds/toxicity.png'),
     name: 'Toxicity',
     releaseDate: 'September 4, 2001',
     tracks: TRACK_FILES.toxicity.map((file) => buildTrack('toxicity', file)),
   },
   {
     key: 'steal_this_album',
-    img: '/albums/steal_this_album.jpg',
-    cd: '/cds/steal_this_album.png',
+    img: assetUrl('/albums/steal_this_album.jpg'),
+    cd: assetUrl('/cds/steal_this_album.png'),
     name: 'Steal This Album!',
     releaseDate: 'November 26, 2002',
     tracks: TRACK_FILES.steal_this_album.map((file) => buildTrack('steal_this_album', file)),
   },
   {
     key: 'mezmerize',
-    img: '/albums/mezmerize.jpg',
-    cd: '/cds/mezmerize.png',
+    img: assetUrl('/albums/mezmerize.jpg'),
+    cd: assetUrl('/cds/mezmerize.png'),
     name: 'Mezmerize',
     releaseDate: 'May 17, 2005',
     tracks: TRACK_FILES.mezmerize.map((file) => buildTrack('mezmerize', file)),
   },
   {
     key: 'hypnotize',
-    img: '/albums/hypnotize.jpg',
-    cd: '/cds/hypnotize.png',
+    img: assetUrl('/albums/hypnotize.jpg'),
+    cd: assetUrl('/cds/hypnotize.png'),
     name: 'Hypnotize',
     releaseDate: 'November 22, 2005',
     tracks: TRACK_FILES.hypnotize.map((file) => buildTrack('hypnotize', file)),
@@ -255,7 +257,7 @@ function AlbumCard({ album, index, position, rotation, focusIndex, onFocus }) {
 
       <Image url={album.img} position={[0, 0, 0.08]} scale={[2.56, 2.56]} toneMapped={false} />
       <Image
-        url="/albums/soad_logo.jpg"
+        url={assetUrl('/albums/soad_logo.jpg')}
         position={[0, 0, -0.08]}
         rotation={[0, Math.PI, 0]}
         scale={[2.56, 2.56]}
@@ -458,7 +460,7 @@ function TopNav() {
   return (
     <header className="app-nav">
       <div className="brand-lockup">
-        <img src="/logo.png" alt="System Of A Down" className="app-logo" />
+        <img src={assetUrl('/logo.png')} alt="System Of A Down" className="app-logo" />
         <p className="brand-meta">3D Listening Vault</p>
       </div>
       <nav className="app-nav-links">
