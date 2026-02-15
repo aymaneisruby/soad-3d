@@ -13,6 +13,9 @@ const NAV_ITEMS = [
 ]
 
 const BAND_MEMBERS = [
+  // Source-of-truth dataset for the members section UI + 3D cards.
+  // `accent` drives the overlay theme color, and `image` is used both in
+  // the list thumbnail and in the in-scene portrait card.
   {
     name: 'Serj Tankian',
     role: 'Lead Vocals, Keyboards',
@@ -179,6 +182,33 @@ const ALBUMS = [
     tracks: TRACK_FILES.hypnotize.map((file) => buildTrack('hypnotize', file)),
   },
 ]
+
+// Browser rule: a given HTMLMediaElement can only be wrapped once by
+// createMediaElementSource() for the document lifetime.
+// We cache and reuse the graph per audio element to avoid InvalidStateError,
+// including React StrictMode remount cycles in development.
+const AUDIO_GRAPH_CACHE = new WeakMap()
+
+const getOrCreateAudioGraph = (audioElement) => {
+  const cached = AUDIO_GRAPH_CACHE.get(audioElement)
+  if (cached) return cached
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return null
+
+  const ctx = new AudioContextClass()
+  const analyser = ctx.createAnalyser()
+  analyser.fftSize = 256
+  analyser.smoothingTimeConstant = 0.82
+
+  const source = ctx.createMediaElementSource(audioElement)
+  source.connect(analyser)
+  analyser.connect(ctx.destination)
+
+  const graph = { ctx, analyser, source }
+  AUDIO_GRAPH_CACHE.set(audioElement, graph)
+  return graph
+}
 
 function AlbumCard({ album, index, position, rotation, focusIndex, onFocus }) {
   const groupRef = useRef(null)
@@ -461,12 +491,16 @@ function HeroCopy({ focused, pinned, onToggle }) {
 }
 
 function MembersScene({ members, selected, onSelect }) {
+  // Holds refs to each 3D card so we can animate them every frame.
   const cardsRef = useRef([])
+  // Tracks pointer drag state to detect horizontal swipe gestures.
   const dragRef = useRef({ down: false, startX: 0, moved: 0 })
   const { camera, gl } = useThree()
   const count = members.length
 
   const getRelativeIndex = (idx) => {
+    // Convert absolute index to shortest circular distance from selection.
+    // Example with 4 items: selected=0, idx=3 => rel=-1 (left neighbor).
     const raw = idx - selected
     const half = Math.floor(count / 2)
     if (raw > half) return raw - count
@@ -478,25 +512,32 @@ function MembersScene({ members, selected, onSelect }) {
     const domElement = gl.domElement
 
     const onDown = (event) => {
+      // Start drag tracking on canvas pointer down.
       dragRef.current = { down: true, startX: event.clientX, moved: 0 }
     }
     const onMove = (event) => {
       if (!dragRef.current.down) return
+      // Keep latest horizontal movement since drag start.
       dragRef.current.moved = event.clientX - dragRef.current.startX
     }
     const onUp = () => {
       if (!dragRef.current.down) return
       const delta = dragRef.current.moved
+      // Swipe threshold: move to previous/next member when drag is intentional.
       if (delta > 48) onSelect((selected - 1 + count) % count)
       if (delta < -48) onSelect((selected + 1) % count)
+      // Reset drag state after pointer release.
       dragRef.current = { down: false, startX: 0, moved: 0 }
     }
     const onWheel = (event) => {
+      // Ignore tiny wheel jitter and only use meaningful scroll deltas.
       if (Math.abs(event.deltaY) < 12) return
+      // Scroll down => next, scroll up => previous.
       if (event.deltaY > 0) onSelect((selected + 1) % count)
       else onSelect((selected - 1 + count) % count)
     }
     const onKey = (event) => {
+      // Keyboard fallback for accessibility and desktop navigation.
       if (event.key === 'ArrowLeft') onSelect((selected - 1 + count) % count)
       if (event.key === 'ArrowRight') onSelect((selected + 1) % count)
     }
@@ -519,22 +560,29 @@ function MembersScene({ members, selected, onSelect }) {
   useFrame((_, delta) => {
     cardsRef.current.forEach((card, idx) => {
       if (!card) return
+      // Relative slot around the center card (0=center, -1 left, +1 right...).
       const rel = getRelativeIndex(idx)
       const absRel = Math.abs(rel)
 
+      // Stage layout: spread cards horizontally and push non-selected cards back.
       const targetX = rel * 2.55
+      // Subtle idle bob for the selected card; stepped vertical offset otherwise.
       const targetY = absRel === 0 ? Math.sin(performance.now() * 0.0018) * 0.06 : -0.08 * absRel
       const targetZ = -absRel * 2.35
       const targetRotY = rel * -0.36
+      // Emphasize selected card, then immediate neighbors, then distant cards.
       const targetScale = absRel === 0 ? 1.06 : absRel === 1 ? 0.86 : 0.7
 
+      // Smoothly interpolate transform targets for cinematic movement.
       easing.damp3(card.position, [targetX, targetY, targetZ], 0.19, delta)
       easing.dampE(card.rotation, [0, targetRotY, 0], 0.19, delta)
       easing.damp3(card.scale, [targetScale, targetScale, targetScale], 0.19, delta)
+      // Only render cards close to the viewport center for clarity/perf.
       card.visible = absRel <= 2
     })
 
-    easing.damp3(camera.position, [0, 0, 11.8], 0.4, delta)
+    // Keep members camera locked to a consistent framing.
+    easing.damp3(camera.position, [-1.05, 0, 11.8], 0.4, delta)
     easing.dampE(camera.rotation, [0, 0, 0], 0.4, delta)
   })
 
@@ -552,11 +600,13 @@ function MembersScene({ members, selected, onSelect }) {
         {members.map((member, idx) => (
           <group
             key={member.name}
+            // Store node by index so `useFrame` can animate by logical order.
             ref={(el) => {
               cardsRef.current[idx] = el
             }}
             onClick={(event) => {
               event.stopPropagation()
+              // Clicking a card jumps directly to that member.
               onSelect(idx)
             }}
           >
@@ -568,8 +618,16 @@ function MembersScene({ members, selected, onSelect }) {
               <planeGeometry args={[2.28, 3.02]} />
               <meshStandardMaterial color="#171717" emissive="#100808" emissiveIntensity={0.25} />
             </mesh>
-            <Image url={member.image} position={[0, 0, 0.08]} scale={[2.2, 2.94]} toneMapped={false} />
-            <Text position={[0, -1.92, 0.08]} fontSize={0.14} color="#f7f2ea" anchorX="center">
+            <Image url={member.image} position={[0, 0, 0.08]} scale={[2.04, 2.86]} toneMapped={false} />
+            <Text
+              position={[0, -1.92, 0.08]}
+              fontSize={0.12}
+              maxWidth={2.15}
+              textAlign="center"
+              lineHeight={1}
+              color="#f7f2ea"
+              anchorX="center"
+            >
               {member.name.toUpperCase()}
             </Text>
           </group>
@@ -582,16 +640,19 @@ function MembersScene({ members, selected, onSelect }) {
 }
 
 function BandMembersSection({ members, index, onPrev, onNext, onSelect }) {
+  // Current member object backing all right-side overlay content.
   const member = members[index]
 
   return (
     <section id="members" className="members-shell">
       <div className="members-canvas-wrap">
+        {/* Dedicated canvas for the members carousel experience. */}
         <Canvas camera={{ position: [0, 0, 12], fov: 42 }} dpr={[1.5, 3]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
           <MembersScene members={members} selected={index} onSelect={onSelect} />
         </Canvas>
       </div>
 
+      {/* Overlay panel stays in sync with selected member + accent color. */}
       <aside className="members-overlay" style={{ '--member-accent': member.accent }}>
         <p className="members-kicker">System Of A Down</p>
         <h2 className="members-title">Band Members</h2>
@@ -601,6 +662,7 @@ function BandMembersSection({ members, index, onPrev, onNext, onSelect }) {
             Previous
           </button>
           <span className="member-counter">
+            {/* 01 / 04 style counter keeps fixed-width visual rhythm. */}
             {String(index + 1).padStart(2, '0')} / {String(members.length).padStart(2, '0')}
           </span>
           <button type="button" className="panel-btn" onClick={onNext}>
@@ -613,6 +675,7 @@ function BandMembersSection({ members, index, onPrev, onNext, onSelect }) {
               key={item.name}
               type="button"
               className={`member-list-item ${memberIdx === index ? 'is-active' : ''}`}
+              // Direct index selection from the thumbnail list.
               onClick={() => onSelect(memberIdx)}
             >
               <img src={item.image} alt={item.name} className="member-thumb" loading="lazy" />
@@ -690,46 +753,202 @@ function formatTime(seconds) {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-function GlobalPlayer({ nowPlaying, isPlaying, onPauseResume, onOpenAlbum, onPrev, onNext, currentTime, duration, onSeek }) {
+function AudioSpectrum({ audioRef, isPlaying }) {
+  const canvasRef = useRef(null)
+  const rafRef = useRef(0)
+  const analyserRef = useRef(null)
+  const audioCtxRef = useRef(null)
+  const dataRef = useRef(null)
+  const isPlayingRef = useRef(isPlaying)
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return undefined
+
+    const graph = getOrCreateAudioGraph(audio)
+    if (!graph) return undefined
+
+    audioCtxRef.current = graph.ctx
+    analyserRef.current = graph.analyser
+    dataRef.current = new Uint8Array(graph.analyser.frequencyBinCount)
+
+    const draw = () => {
+      const canvas = canvasRef.current
+      const analyserNode = analyserRef.current
+      const data = dataRef.current
+      if (!canvas || !analyserNode || !data) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
+
+      const dpr = window.devicePixelRatio || 1
+      const width = canvas.clientWidth
+      const height = canvas.clientHeight
+      if (width && height && (canvas.width !== Math.floor(width * dpr) || canvas.height !== Math.floor(height * dpr))) {
+        canvas.width = Math.floor(width * dpr)
+        canvas.height = Math.floor(height * dpr)
+      }
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(draw)
+        return
+      }
+
+      analyserNode.getByteFrequencyData(data)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.save()
+      ctx.scale(dpr, dpr)
+
+      const bars = 42
+      const gap = 2
+      const barWidth = Math.max(2, (width - (bars - 1) * gap) / bars)
+      const binsPerBar = Math.max(1, Math.floor(data.length / bars))
+      const grad = ctx.createLinearGradient(0, 0, width, 0)
+      grad.addColorStop(0, '#7d2017')
+      grad.addColorStop(0.5, '#d24e35')
+      grad.addColorStop(1, '#f0b69a')
+      ctx.fillStyle = grad
+
+      for (let i = 0; i < bars; i += 1) {
+        let sum = 0
+        const start = i * binsPerBar
+        for (let j = 0; j < binsPerBar; j += 1) sum += data[start + j] || 0
+        const avg = sum / binsPerBar
+        const energy = isPlayingRef.current ? avg / 255 : 0.06
+        const barHeight = Math.max(2, energy * (height - 2))
+        const x = i * (barWidth + gap)
+        const y = height - barHeight
+        ctx.fillRect(x, y, barWidth, barHeight)
+      }
+
+      ctx.restore()
+      rafRef.current = requestAnimationFrame(draw)
+    }
+
+    rafRef.current = requestAnimationFrame(draw)
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      // Keep shared graph alive; only stop this component's draw loop.
+      analyserRef.current = null
+      audioCtxRef.current = null
+      dataRef.current = null
+    }
+  }, [audioRef])
+
+  useEffect(() => {
+    if (!isPlaying) return
+    const ctx = audioCtxRef.current
+    if (!ctx || ctx.state !== 'suspended') return
+    ctx.resume().catch(() => {})
+  }, [isPlaying])
+
+  return (
+    <div className="global-visualizer" aria-hidden="true">
+      <canvas ref={canvasRef} className="global-visualizer-canvas" />
+    </div>
+  )
+}
+
+function GlobalPlayer({
+  nowPlaying,
+  isPlaying,
+  onPauseResume,
+  onOpenAlbum,
+  onPrev,
+  onNext,
+  currentTime,
+  duration,
+  onSeek,
+  volume,
+  isMuted,
+  onVolumeChange,
+  onToggleMute,
+  audioRef,
+  isExpanded,
+  onExpand,
+  onCollapse,
+  onToggleExpanded,
+  isDockLeft,
+}) {
   if (!nowPlaying) return null
 
   return (
-    <section className="global-player" aria-live="polite">
-      <div className={`global-disc ${isPlaying ? 'is-spinning' : ''}`}>
-        <img src={nowPlaying.albumCd} alt={`${nowPlaying.albumName} disc`} />
-      </div>
-      <div className="global-meta">
-        <p className="global-kicker">Now Playing</p>
-        <p className="global-title">{nowPlaying.title}</p>
-        <p className="global-subtitle">
-          {nowPlaying.albumName} · {nowPlaying.number}
-        </p>
-      </div>
-      <div className="global-actions">
-        <button type="button" className="panel-btn panel-btn-ghost" onClick={onPrev}>
-          Prev
-        </button>
-        <button type="button" className="panel-btn" onClick={onPauseResume}>
-          {isPlaying ? 'Pause' : 'Play'}
-        </button>
-        <button type="button" className="panel-btn panel-btn-ghost" onClick={onNext}>
-          Next
-        </button>
-        <button type="button" className="panel-btn panel-btn-ghost" onClick={onOpenAlbum}>
-          Open Album
-        </button>
-      </div>
-      <div className="global-progress">
-        <span>{formatTime(currentTime)}</span>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(duration, 1)}
-          value={Math.min(currentTime, duration || 0)}
-          onInput={onSeek}
-          onChange={onSeek}
-        />
-        <span>{formatTime(duration)}</span>
+    <section
+      className={`global-player ${isExpanded ? 'is-open' : ''} ${isDockLeft ? 'is-dock-left' : ''}`}
+      aria-live="polite"
+      onMouseLeave={onCollapse}
+    >
+      <button
+        type="button"
+        className="global-disc-btn"
+        onMouseEnter={onExpand}
+        onFocus={onExpand}
+        onClick={onToggleExpanded}
+        aria-label={isExpanded ? 'Collapse player' : 'Expand player'}
+      >
+        <div className={`global-disc ${isPlaying ? 'is-spinning' : ''}`}>
+          <img src={nowPlaying.albumCd} alt={`${nowPlaying.albumName} disc`} />
+        </div>
+      </button>
+      <div className="global-player-body">
+        <div className="global-meta">
+          <p className="global-kicker">Now Playing</p>
+          <p className="global-title">{nowPlaying.title}</p>
+          <p className="global-subtitle">
+            {nowPlaying.albumName} · {nowPlaying.number}
+          </p>
+        </div>
+        <div className="global-actions">
+          <button type="button" className="panel-btn panel-btn-ghost" onClick={onPrev}>
+            Prev
+          </button>
+          <button type="button" className="panel-btn" onClick={onPauseResume}>
+            {isPlaying ? 'Pause' : 'Play'}
+          </button>
+          <button type="button" className="panel-btn panel-btn-ghost" onClick={onNext}>
+            Next
+          </button>
+          <button type="button" className="panel-btn panel-btn-ghost" onClick={onOpenAlbum}>
+            Open Album
+          </button>
+        </div>
+        <div className="global-progress">
+          <span>{formatTime(currentTime)}</span>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(duration, 1)}
+            value={Math.min(currentTime, duration || 0)}
+            onInput={onSeek}
+            onChange={onSeek}
+            aria-label="Playback position"
+          />
+          <span>{formatTime(duration)}</span>
+        </div>
+        <div className="global-extra">
+          <div className="global-volume">
+            <button type="button" className="panel-btn panel-btn-ghost" onClick={onToggleMute}>
+              {isMuted || volume === 0 ? 'Unmute' : 'Mute'}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(volume * 100)}
+              onInput={onVolumeChange}
+              onChange={onVolumeChange}
+              aria-label="Volume"
+            />
+            <span>{Math.round(volume * 100)}%</span>
+          </div>
+          <AudioSpectrum audioRef={audioRef} isPlaying={isPlaying} />
+        </div>
       </div>
     </section>
   )
@@ -742,7 +961,11 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(0.85)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isPlayerExpanded, setIsPlayerExpanded] = useState(false)
   const [infoPinned, setInfoPinned] = useState(false)
+  // Single source of current member selection for the entire members section.
   const [memberIndex, setMemberIndex] = useState(0)
   const audioRef = useRef(null)
   const skipAutoStartRef = useRef(false)
@@ -771,6 +994,13 @@ export default function App() {
       .then(() => setIsPlaying(true))
       .catch(() => setIsPlaying(false))
   }, [nowPlaying])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.volume = volume
+    audio.muted = isMuted
+  }, [isMuted, volume])
 
   const startTrack = useCallback((albumKey, trackIndex) => {
     const album = ALBUMS.find((item) => item.key === albumKey)
@@ -844,11 +1074,27 @@ export default function App() {
     setCurrentTime(time)
   }
 
+  const handleVolumeChange = (event) => {
+    const nextVolume = Number(event.target.value) / 100
+    setVolume(nextVolume)
+    if (nextVolume > 0 && isMuted) setIsMuted(false)
+  }
+
+  const handleToggleMute = () => {
+    setIsMuted((prev) => !prev)
+  }
+
+  const handleExpandPlayer = () => setIsPlayerExpanded(true)
+  const handleCollapsePlayer = () => setIsPlayerExpanded(false)
+  const handleTogglePlayerExpanded = () => setIsPlayerExpanded((prev) => !prev)
+
   const handlePrevMember = () => {
+    // Circular navigation: move left, wrapping to the last member.
     setMemberIndex((prev) => (prev - 1 + BAND_MEMBERS.length) % BAND_MEMBERS.length)
   }
 
   const handleNextMember = () => {
+    // Circular navigation: move right, wrapping back to index 0.
     setMemberIndex((prev) => (prev + 1) % BAND_MEMBERS.length)
   }
 
@@ -876,6 +1122,16 @@ export default function App() {
           currentTime={currentTime}
           duration={duration}
           onSeek={handleSeek}
+          volume={volume}
+          isMuted={isMuted}
+          onVolumeChange={handleVolumeChange}
+          onToggleMute={handleToggleMute}
+          audioRef={audioRef}
+          isExpanded={isPlayerExpanded}
+          onExpand={handleExpandPlayer}
+          onCollapse={handleCollapsePlayer}
+          onToggleExpanded={handleTogglePlayerExpanded}
+          isDockLeft={focusIndex === null}
           onOpenAlbum={() => {
             if (!nowPlaying) return
             skipAutoStartRef.current = true
@@ -919,13 +1175,20 @@ export default function App() {
         />
       </main>
 
+      {/*
+        Members section disabled per request.
+        Kept in codebase for easy re-enable later.
+      */}
+      {/*
       <BandMembersSection
         members={BAND_MEMBERS}
         index={memberIndex}
+        // Parent owns state; section receives pure callbacks for navigation.
         onPrev={handlePrevMember}
         onNext={handleNextMember}
         onSelect={setMemberIndex}
       />
+      */}
     </>
   )
 }
